@@ -82,9 +82,8 @@ publishing {
     }
 }
 
-// Maven Central requires a GPG signature for releases but not for snapshots. Sign only release
-// versions, and only when a key is supplied, so snapshot publishing (every push) and local builds
-// work without GPG configured.
+// Sign only release versions (never SNAPSHOTs), and only when a key is supplied, so a local
+// `publishToMavenLocal` of the 0.0.0-SNAPSHOT and other local builds work without GPG configured.
 signing {
     val signingKey = providers.environmentVariable("SIGNING_KEY").orNull
     val signingPassword = providers.environmentVariable("SIGNING_PASSWORD").orNull

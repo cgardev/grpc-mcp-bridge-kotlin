@@ -67,27 +67,26 @@ virtual-thread executor off the event loop.
 ## Installation
 
 The modules are published to **Maven Central** under the `io.github.cgardev` group. While the
-project is in alpha, every push to `main` publishes a `0.0.0-SNAPSHOT` to the Central snapshots
-repository; tagged releases publish a fixed version.
+project is in alpha, every commit on `main` is published as a release versioned by its short
+commit hash, so you can pin to an exact build; tagged releases publish a semantic version.
 
 ```kotlin
 repositories {
     mavenCentral()
-    // Snapshots only (drop once a release is tagged):
-    maven { url = uri("https://central.sonatype.com/repository/maven-snapshots/") }
 }
 
 dependencies {
-    implementation("io.github.cgardev:mcp-grpc-bridge:0.0.0-SNAPSHOT")
-    implementation("io.github.cgardev:mcp-server:0.0.0-SNAPSHOT")
+    // Replace <commit> with a short commit SHA from main (or a release version once tagged).
+    implementation("io.github.cgardev:mcp-grpc-bridge:<commit>")
+    implementation("io.github.cgardev:mcp-server:<commit>")
     // Optional Spring Boot starter:
-    // implementation("io.github.cgardev:mcp-grpc-bridge-spring-boot-autoconfigure:0.0.0-SNAPSHOT")
+    // implementation("io.github.cgardev:mcp-grpc-bridge-spring-boot-autoconfigure:<commit>")
 }
 ```
 
 > [!WARNING]
-> **Alpha.** Snapshot artifacts are mutable and may change without notice. Pin a tagged release
-> version once one is available, and review the release notes before upgrading.
+> **Alpha.** The public API and wire behaviour may change between commits without notice. Pin an
+> exact version and review changes before upgrading.
 
 ## Quick start
 
@@ -175,24 +174,23 @@ build-logic/                                           Gradle convention plugins
 
 ## Versioning & compatibility
 
-During alpha the Gradle version stays at `0.0.0-SNAPSHOT`: every push to `main` republishes the
-snapshot, so source, binary and wire behaviour may change at any time. Once the API settles the
-project will adopt semantic versioning with tagged releases. Pin a release version (not the
-snapshot) for anything you depend on.
+During alpha the commit **is** the version: every commit on `main` is published to Maven Central
+under its short commit hash, and source, binary and wire behaviour may change between any two
+commits. Once the API settles the project will adopt semantic versioning with tagged releases. Pin
+an exact version and upgrade deliberately.
 
 ## Publishing
 
 Publishing goes to **Maven Central** under the `io.github.cgardev` group, through the
 [Sonatype Central Portal](https://central.sonatype.com):
 
-- **Every push to `main`** publishes the `0.0.0-SNAPSHOT` to the Central snapshots repository.
-- **Publishing a GitHub release** publishes the tag's version to a Central staging deployment and
-  promotes it (`publishing_type=automatic`), so it is released to Maven Central once validation
-  passes.
+- **Every push to `main`** publishes a release versioned by the short commit hash.
+- **Publishing a GitHub release** publishes the tag's version.
 
-Both paths run from [`.github/workflows/publish.yml`](.github/workflows/publish.yml) and require the
-`CENTRAL_USERNAME`, `CENTRAL_PASSWORD`, `SIGNING_KEY` and `SIGNING_PASSWORD` repository (or
-organization) secrets. Releases are signed with the GPG key; snapshots do not require a signature.
+Both sign the artifacts and promote the Central staging deployment automatically
+(`publishing_type=automatic`), so it is released to Maven Central once validation passes. The flow
+runs from [`.github/workflows/publish.yml`](.github/workflows/publish.yml) and requires the
+`CENTRAL_USERNAME`, `CENTRAL_PASSWORD`, `SIGNING_KEY` and `SIGNING_PASSWORD` repository secrets.
 
 ## Disclaimer
 
