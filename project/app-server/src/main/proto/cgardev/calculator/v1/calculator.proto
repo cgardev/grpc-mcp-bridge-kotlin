@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package cgardev.calculator.v1;
+
+option java_multiple_files = true;
+option java_package = "io.github.cgardev.calculator.v1";
+option java_outer_classname = "CalculatorProto";
+
+// A small demonstration gRPC service whose methods are exposed as MCP tools by the
+// example server. Each method takes a BinaryOp and returns a CalcResult, so every
+// tool's input schema is generated from the same proto message.
+service CalculatorService {
+  rpc Add(BinaryOp) returns (CalcResult);
+
+  rpc Subtract(BinaryOp) returns (CalcResult);
+
+  rpc Divide(BinaryOp) returns (CalcResult);
+}
+
+message BinaryOp {
+  double a = 1;
+  double b = 2;
+}
+
+message CalcResult {
+  double value = 1;
+}

@@ -1,0 +1,92 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Mapped at job level so the Maven Central step can guard on their presence.
+    env:
+      CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+      CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 24
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: "24"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # The commit is the version (same convention as JitPack); publish each
+      # module under the short commit hash so a build is addressable by SHA.
+      - name: Publish to GitHub Packages
+        run: >-
+          ./gradlew
+          -Pversion="${GITHUB_SHA::7}"
+          :project:lib-protobuf-jsonschema:publishMavenPublicationToGitHubPackagesRepository
+          :project:lib-mcp-server:publishMavenPublicationToGitHubPackagesRepository
+          :project:lib-mcp-grpc-bridge:publishMavenPublicationToGitHubPackagesRepository
+          :project:lib-mcp-grpc-bridge-spring-boot-autoconfigure:publishMavenPublicationToGitHubPackagesRepository
+          --no-daemon --stacktrace
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Drop any staging repository left open by a previous run so the deployment
+      # promoted below contains only this run's artifacts. Best effort: a missing or
+      # differently shaped response simply leaves nothing to drop.
+      - name: Reset open Central staging repositories
+        if: ${{ env.CENTRAL_USERNAME != '' }}
+        run: |
+          set -euo pipefail
+          api="https://ossrh-staging-api.central.sonatype.com"
+          bearer=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 -w0)
+          repositories=$(curl -sS -H "Authorization: Bearer $bearer" "$api/manual/search/repositories?state=open" || echo '{}')
+          echo "$repositories" | jq -r '.repositories[]?.key // empty' | while read -r key; do
+            echo "Dropping stale open staging repository: $key"
+            curl -sS -X POST -H "Authorization: Bearer $bearer" "$api/manual/drop/repository/$key" || true
+          done
+
+      # Uploads the signed artifacts to a Maven Central staging repository through the
+      # Sonatype Central Portal. Skipped until the Central Portal token secrets exist,
+      # so GitHub Packages publishing keeps working before Maven Central is set up.
+      # Maven Central rejects SNAPSHOT versions, so the short commit hash is published
+      # as the release version.
+      - name: Publish to Maven Central
+        if: ${{ env.CENTRAL_USERNAME != '' }}
+        run: >-
+          ./gradlew
+          -Pversion="${GITHUB_SHA::7}"
+          :project:lib-protobuf-jsonschema:publishMavenPublicationToMavenCentralRepository
+          :project:lib-mcp-server:publishMavenPublicationToMavenCentralRepository
+          :project:lib-mcp-grpc-bridge:publishMavenPublicationToMavenCentralRepository
+          :project:lib-mcp-grpc-bridge-spring-boot-autoconfigure:publishMavenPublicationToMavenCentralRepository
+          --no-daemon --stacktrace
+
+      # Uploading only stages the artifacts in an open repository; this turns that
+      # repository into a Central Portal deployment. publishing_type=automatic releases
+      # it to Maven Central once validation passes, with no manual review in the portal;
+      # switch to user_managed to require pressing "Publish" in the portal instead.
+      - name: Promote and release the staging repository to Maven Central
+        if: ${{ env.CENTRAL_USERNAME != '' }}
+        run: |
+          set -euo pipefail
+          api="https://ossrh-staging-api.central.sonatype.com"
+          bearer=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 -w0)
+          curl -sS --fail-with-body -X POST \
+            -H "Authorization: Bearer $bearer" \
+            "$api/manual/upload/defaultRepository/io.github.cgardev?publishing_type=automatic" \
+            -w '\nHTTP %{http_code}\n'

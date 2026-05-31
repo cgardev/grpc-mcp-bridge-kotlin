@@ -1,0 +1,16 @@
+grpc-mcp-bridge-kotlin
+Copyright 2026 Cristian Garcia
+
+This product is an independent, server-side bridge between the Model Context
+Protocol (https://modelcontextprotocol.io) and gRPC for the JVM. It is not
+affiliated with or endorsed by Anthropic, the Model Context Protocol project,
+or the gRPC project. "Model Context Protocol", "MCP" and "gRPC" are trademarks
+of their respective owners.
+
+This product depends on software developed by third parties, including:
+  - MCP Java SDK (https://github.com/modelcontextprotocol/java-sdk) — MIT License
+  - gRPC (https://grpc.io)                  — Apache License 2.0
+  - Protocol Buffers (https://protobuf.dev) — BSD-3-Clause
+  - Netty (https://netty.io)                — Apache License 2.0
+  - Jackson (https://github.com/FasterXML/jackson) — Apache License 2.0
+  - Project Reactor (https://projectreactor.io) — Apache License 2.0
