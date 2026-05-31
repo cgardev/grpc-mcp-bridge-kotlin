@@ -1,18 +1,23 @@
 name: Publish
 
 on:
+  push:
+    branches: [main]
   release:
     types: [published]
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
+
+# Avoid overlapping publish runs racing on the same Central deployment.
+concurrency:
+  group: publish-maven-central
+  cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # Mapped at job level so the Maven Central step can guard on their presence.
     env:
       CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
       CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
@@ -30,26 +35,22 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # The commit is the version (same convention as JitPack); publish each
-      # module under the short commit hash so a build is addressable by SHA.
-      - name: Publish to GitHub Packages
-        run: >-
-          ./gradlew
-          -Pversion="${GITHUB_SHA::7}"
-          :project:lib-protobuf-jsonschema:publishMavenPublicationToGitHubPackagesRepository
-          :project:lib-mcp-server:publishMavenPublicationToGitHubPackagesRepository
-          :project:lib-mcp-grpc-bridge:publishMavenPublicationToGitHubPackagesRepository
-          :project:lib-mcp-grpc-bridge-spring-boot-autoconfigure:publishMavenPublicationToGitHubPackagesRepository
-          --no-daemon --stacktrace
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # A GitHub release publishes the tag's version (a 'v' prefix is stripped) to a Central
+      # staging deployment that the steps below promote. Any other trigger keeps the
+      # gradle.properties 0.0.0-SNAPSHOT version, which routes to the Central snapshots repository.
+      - name: Resolve release version
+        id: ver
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=" >> "$GITHUB_OUTPUT"
+          fi
 
-      # Drop any staging repository left open by a previous run so the deployment
-      # promoted below contains only this run's artifacts. Best effort: a missing or
-      # differently shaped response simply leaves nothing to drop.
+      # Drop any staging repository left open by a previous run so the deployment promoted below
+      # contains only this run's artifacts. Best effort, and only relevant for the release flow.
       - name: Reset open Central staging repositories
-        if: ${{ env.CENTRAL_USERNAME != '' }}
+        if: ${{ github.event_name == 'release' }}
         run: |
           set -euo pipefail
           api="https://ossrh-staging-api.central.sonatype.com"
@@ -60,28 +61,27 @@ jobs:
             curl -sS -X POST -H "Authorization: Bearer $bearer" "$api/manual/drop/repository/$key" || true
           done
 
-      # Uploads the signed artifacts to a Maven Central staging repository through the
-      # Sonatype Central Portal. Skipped until the Central Portal token secrets exist,
-      # so GitHub Packages publishing keeps working before Maven Central is set up.
-      # Maven Central rejects SNAPSHOT versions, so the short commit hash is published
-      # as the release version.
+      # Publishes every module to Maven Central. On a push this uploads the SNAPSHOT to the Central
+      # snapshots repository; on a release it uploads the tag version to a staging deployment.
       - name: Publish to Maven Central
-        if: ${{ env.CENTRAL_USERNAME != '' }}
-        run: >-
-          ./gradlew
-          -Pversion="${GITHUB_SHA::7}"
-          :project:lib-protobuf-jsonschema:publishMavenPublicationToMavenCentralRepository
-          :project:lib-mcp-server:publishMavenPublicationToMavenCentralRepository
-          :project:lib-mcp-grpc-bridge:publishMavenPublicationToMavenCentralRepository
-          :project:lib-mcp-grpc-bridge-spring-boot-autoconfigure:publishMavenPublicationToMavenCentralRepository
-          --no-daemon --stacktrace
+        run: |
+          set -euo pipefail
+          args=(--no-daemon --stacktrace)
+          if [ -n "${{ steps.ver.outputs.version }}" ]; then
+            args+=("-Pversion=${{ steps.ver.outputs.version }}")
+          fi
+          ./gradlew "${args[@]}" \
+            :project:lib-protobuf-jsonschema:publishMavenPublicationToMavenCentralRepository \
+            :project:lib-mcp-server:publishMavenPublicationToMavenCentralRepository \
+            :project:lib-mcp-grpc-bridge:publishMavenPublicationToMavenCentralRepository \
+            :project:lib-mcp-grpc-bridge-spring-boot-autoconfigure:publishMavenPublicationToMavenCentralRepository
 
-      # Uploading only stages the artifacts in an open repository; this turns that
-      # repository into a Central Portal deployment. publishing_type=automatic releases
-      # it to Maven Central once validation passes, with no manual review in the portal;
-      # switch to user_managed to require pressing "Publish" in the portal instead.
+      # Uploading only stages the artifacts in an open repository; this turns that repository into a
+      # Central Portal deployment. publishing_type=automatic releases it to Maven Central once
+      # validation passes, with no manual review; switch to user_managed to require pressing
+      # "Publish" in the portal instead. Snapshots need no promotion, so this runs for releases only.
       - name: Promote and release the staging repository to Maven Central
-        if: ${{ env.CENTRAL_USERNAME != '' }}
+        if: ${{ github.event_name == 'release' }}
         run: |
           set -euo pipefail
           api="https://ossrh-staging-api.central.sonatype.com"

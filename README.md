@@ -7,7 +7,7 @@ request and dispatched to your handler in-process. No sidecar, no servlet contai
 in the core.
 
 [![CI](https://github.com/cgardev/grpc-mcp-bridge-kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/cgardev/grpc-mcp-bridge-kotlin/actions/workflows/ci.yml)
-[![JitPack](https://jitpack.io/v/cgardev/grpc-mcp-bridge-kotlin.svg)](https://jitpack.io/#cgardev/grpc-mcp-bridge-kotlin)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.cgardev/mcp-grpc-bridge.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.cgardev/mcp-grpc-bridge)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF.svg?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![JDK](https://img.shields.io/badge/JDK-24-orange.svg)](https://adoptium.net)
@@ -66,23 +66,28 @@ virtual-thread executor off the event loop.
 
 ## Installation
 
-> [!IMPORTANT]
-> There are **no published releases yet**. While the project is in alpha, it is versioned **by
-> commit** — depend on a specific commit and treat every commit as potentially breaking.
-
-Pull a specific commit through [JitPack](https://jitpack.io):
+The modules are published to **Maven Central** under the `io.github.cgardev` group. While the
+project is in alpha, every push to `main` publishes a `0.0.0-SNAPSHOT` to the Central snapshots
+repository; tagged releases publish a fixed version.
 
 ```kotlin
 repositories {
-    maven { url = uri("https://jitpack.io") }
+    mavenCentral()
+    // Snapshots only (drop once a release is tagged):
+    maven { url = uri("https://central.sonatype.com/repository/maven-snapshots/") }
 }
 
 dependencies {
-    // Replace <commit> with the exact short commit SHA you want to pin to.
-    implementation("com.github.cgardev.grpc-mcp-bridge-kotlin:mcp-grpc-bridge:<commit>")
-    implementation("com.github.cgardev.grpc-mcp-bridge-kotlin:mcp-server:<commit>")
+    implementation("io.github.cgardev:mcp-grpc-bridge:0.0.0-SNAPSHOT")
+    implementation("io.github.cgardev:mcp-server:0.0.0-SNAPSHOT")
+    // Optional Spring Boot starter:
+    // implementation("io.github.cgardev:mcp-grpc-bridge-spring-boot-autoconfigure:0.0.0-SNAPSHOT")
 }
 ```
+
+> [!WARNING]
+> **Alpha.** Snapshot artifacts are mutable and may change without notice. Pin a tagged release
+> version once one is available, and review the release notes before upgrading.
 
 ## Quick start
 
@@ -170,18 +175,24 @@ build-logic/                                           Gradle convention plugins
 
 ## Versioning & compatibility
 
-During alpha there are **no published releases and no version numbers** — the commit **is** the
-version. Pin your dependency to an exact commit and upgrade deliberately; source, binary and wire
-behaviour may change between any two commits. The Gradle version stays at `0.0.0-SNAPSHOT`.
+During alpha the Gradle version stays at `0.0.0-SNAPSHOT`: every push to `main` republishes the
+snapshot, so source, binary and wire behaviour may change at any time. Once the API settles the
+project will adopt semantic versioning with tagged releases. Pin a release version (not the
+snapshot) for anything you depend on.
 
 ## Publishing
 
-There are no tagged releases yet, so consumers use JitPack by commit (see
-[Installation](#installation)); JitPack builds the requested commit per [`jitpack.yml`](jitpack.yml).
-The build is also set up to publish via `maven-publish` to GitHub Packages (out of the box in CI) or
-to Maven Central under the `io.github.cgardev` group through the
-[Sonatype Central Portal](https://central.sonatype.com). See
-[`.github/workflows/publish.yml`](.github/workflows/publish.yml).
+Publishing goes to **Maven Central** under the `io.github.cgardev` group, through the
+[Sonatype Central Portal](https://central.sonatype.com):
+
+- **Every push to `main`** publishes the `0.0.0-SNAPSHOT` to the Central snapshots repository.
+- **Publishing a GitHub release** publishes the tag's version to a Central staging deployment and
+  promotes it (`publishing_type=automatic`), so it is released to Maven Central once validation
+  passes.
+
+Both paths run from [`.github/workflows/publish.yml`](.github/workflows/publish.yml) and require the
+`CENTRAL_USERNAME`, `CENTRAL_PASSWORD`, `SIGNING_KEY` and `SIGNING_PASSWORD` repository (or
+organization) secrets. Releases are signed with the GPG key; snapshots do not require a signature.
 
 ## Disclaimer
 
